@@ -77,10 +77,10 @@
       background: linear-gradient(100deg, rgba(11,42,60,.75) 0%, rgba(11,42,60,.5) 55%, rgba(11,42,60,.3) 100%);
     }
 
-    /* Projects section: wall photo behind a light layer so the cards stay easy to read */
-    .projects-bg {
+    /* Wall photo behind everything below the hero, under a very light layer */
+    .wall-bg {
       background:
-        linear-gradient(rgba(242,244,241,.82), rgba(242,244,241,.82)),
+        linear-gradient(rgba(242,244,241,.05), rgba(242,244,241,.05)),
         url("images/wall.avif") center / cover no-repeat;
     }
 
@@ -171,9 +171,9 @@
     </div>
   </header>
 
-  <main>
+  <main class="wall-bg">
     <!-- ============ PROJECTS ============ -->
-    <section id="projects" class="projects-bg">
+    <section id="projects">
      <div class="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
       <h2 class="display max-w-2xl text-4xl sm:text-5xl">Selected projects</h2>
       <p class="mt-4 max-w-xl text-ink/70">Two AI automations built with n8n and Claude. Each one has a README on GitHub that explains how it works.</p>
@@ -211,7 +211,7 @@
     </section>
 
     <!-- ============ ABOUT ============ -->
-    <section id="about" class="bg-foam">
+    <section id="about" class="bg-foam/60">
       <div class="mx-auto grid max-w-6xl gap-12 px-5 py-20 sm:px-8 sm:py-28 md:grid-cols-12">
         <div class="md:col-span-5">
           <h2 class="display text-4xl sm:text-5xl">About me</h2>
