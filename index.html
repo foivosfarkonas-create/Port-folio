@@ -57,12 +57,26 @@
         radial-gradient(80% 90% at 50% 50%, #0F3A52 0%, #0B2A3C 70%);
       position: relative;
       isolation: isolate;
+      overflow: hidden; /* the scaled photo must not spill outside the hero */
     }
     .hero-bg::after {
       content: "";
       position: absolute; inset: 0; z-index: -1; pointer-events: none;
       opacity: .22; mix-blend-mode: overlay;
       background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    }
+
+    /* Hero photo layers (back to front): photo, color tint, blue multiply layer, particle canvas, grain */
+    .hero-photo {
+      position: absolute; inset: 0; z-index: -4; width: 100%; height: 100%;
+      object-fit: cover; object-position: 50% 25%;
+      filter: saturate(.7) contrast(1.05) blur(1.5px);
+      transform: scale(1.03); /* hides the soft edges the blur creates */
+    }
+    .hero-tone { position: absolute; inset: 0; z-index: -3; background: #1F6F8B; mix-blend-mode: multiply; opacity: .45; }
+    .hero-tint {
+      position: absolute; inset: 0; z-index: -2;
+      background: linear-gradient(100deg, rgba(11,42,60,.93) 0%, rgba(11,42,60,.74) 55%, rgba(15,58,82,.55) 100%);
     }
 
     /* Interactive states: every clickable thing gets hover, focus-visible, active */
@@ -85,16 +99,16 @@
     .project:hover .project-img img { transform: scale(1.04); }
     .project:active .project-img img { transform: scale(1.02); }
 
-    /* The one orchestrated moment: the wave chart is revealed left to right on load */
-    .chart-cover {
-      transform-origin: right;
-      animation: reveal 4s .5s cubic-bezier(.65,0,.35,1) forwards;
+    /* The wave chart is revealed left to right on load: a mask slides across it (transform only) */
+    .wipe {
+      transform-box: fill-box;
+      animation: wipe 4s .5s cubic-bezier(.65,0,.35,1) both;
     }
-    @keyframes reveal { to { transform: scaleX(0); } }
+    @keyframes wipe { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
-      .chart-cover { animation: none; transform: scaleX(0); }
+      .wipe { animation: none; }
       .btn, .nav-link::after, .project-img img { transition: none; }
     }
   </style>
@@ -104,6 +118,12 @@
 
   <!-- ============ HERO ============ -->
   <header class="hero-bg text-chalk">
+    <!-- Decorative background layers, hidden from screen readers -->
+    <img src="images/kos.jpg" alt="" class="hero-photo" aria-hidden="true">
+    <div class="hero-tone" aria-hidden="true"></div>
+    <div class="hero-tint" aria-hidden="true"></div>
+    <canvas id="hero-canvas" class="absolute inset-0 h-full w-full" style="z-index:-1" aria-hidden="true"></canvas>
+
     <nav class="mx-auto flex max-w-6xl items-center justify-between px-5 py-6 sm:px-8" aria-label="Main">
       <a href="#top" class="display text-2xl hover:opacity-80 active:opacity-60">Foivos</a>
       <ul class="flex gap-6 text-sm sm:gap-8">
@@ -133,12 +153,15 @@
               <stop offset="0" stop-color="#F2B134" stop-opacity=".35"/>
               <stop offset="1" stop-color="#F2B134" stop-opacity="0"/>
             </linearGradient>
+            <mask id="wipe-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1000" height="200">
+              <rect class="wipe" width="1000" height="200" fill="#fff"/>
+            </mask>
           </defs>
-          <path d="M0 140 C 60 110, 100 150, 160 120 S 260 60, 320 90 S 420 150, 480 110 S 580 40, 650 70 S 760 120, 820 80 S 920 30, 1000 50 L1000 200 L0 200 Z" fill="url(#area)"/>
-          <path d="M0 140 C 60 110, 100 150, 160 120 S 260 60, 320 90 S 420 150, 480 110 S 580 40, 650 70 S 760 120, 820 80 S 920 30, 1000 50" fill="none" stroke="#F2B134" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+          <g mask="url(#wipe-mask)">
+            <path d="M0 140 C 60 110, 100 150, 160 120 S 260 60, 320 90 S 420 150, 480 110 S 580 40, 650 70 S 760 120, 820 80 S 920 30, 1000 50 L1000 200 L0 200 Z" fill="url(#area)"/>
+            <path d="M0 140 C 60 110, 100 150, 160 120 S 260 60, 320 90 S 420 150, 480 110 S 580 40, 650 70 S 760 120, 820 80 S 920 30, 1000 50" fill="none" stroke="#F2B134" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+          </g>
         </svg>
-        <!-- Cover that shrinks away to reveal the chart -->
-        <div class="chart-cover absolute inset-0" style="background:#0B2A3C"></div>
       </div>
     </div>
   </header>
@@ -220,5 +243,108 @@
     </div>
   </footer>
 
+  <!-- Hero particle network: dots drift, link to each other, and reach toward the pointer -->
+  <script>
+    (function () {
+      const hero = document.querySelector('.hero-bg');
+      const canvas = document.getElementById('hero-canvas');
+      const ctx = canvas.getContext('2d');
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      const LINK_DISTANCE = 130;   // dots closer than this get a line between them
+      const POINTER_RANGE = 190;   // dots closer than this to the pointer link to it
+      let width = 0, height = 0, particles = [], frame = null;
+      const pointer = { x: 0, y: 0, active: false };
+
+      function resize() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const rect = hero.getBoundingClientRect();
+        width = rect.width;
+        height = rect.height;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const count = Math.round(Math.min(90, (width * height) / 14000));
+        particles = Array.from({ length: count }, () => ({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          vx: (Math.random() - 0.5) * 0.3,
+          vy: (Math.random() - 0.5) * 0.3,
+        }));
+        draw();
+      }
+
+      function update() {
+        for (const p of particles) {
+          if (pointer.active) {
+            const dx = pointer.x - p.x, dy = pointer.y - p.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < POINTER_RANGE && dist > 1) {
+              p.vx += (dx / dist) * 0.012; // gentle pull toward the pointer
+              p.vy += (dy / dist) * 0.012;
+            }
+          }
+          p.vx *= 0.99; p.vy *= 0.99;    // slow friction so dots never speed away
+          p.x += p.vx; p.y += p.vy;
+          if (p.x < 0) p.x = width;  if (p.x > width) p.x = 0;
+          if (p.y < 0) p.y = height; if (p.y > height) p.y = 0;
+        }
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, width, height);
+
+        if (pointer.active) {            // soft sun-colored glow under the pointer
+          const glow = ctx.createRadialGradient(pointer.x, pointer.y, 0, pointer.x, pointer.y, 240);
+          glow.addColorStop(0, 'rgba(242,177,52,.20)');
+          glow.addColorStop(1, 'rgba(242,177,52,0)');
+          ctx.fillStyle = glow;
+          ctx.fillRect(0, 0, width, height);
+        }
+
+        ctx.lineWidth = 1;
+        for (let i = 0; i < particles.length; i++) {
+          const a = particles[i];
+          for (let j = i + 1; j < particles.length; j++) {
+            const b = particles[j];
+            const d = Math.hypot(a.x - b.x, a.y - b.y);
+            if (d < LINK_DISTANCE) {
+              ctx.strokeStyle = `rgba(221,230,228,${0.22 * (1 - d / LINK_DISTANCE)})`;
+              ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+            }
+          }
+          if (pointer.active) {
+            const d = Math.hypot(a.x - pointer.x, a.y - pointer.y);
+            if (d < POINTER_RANGE) {
+              ctx.strokeStyle = `rgba(242,177,52,${0.7 * (1 - d / POINTER_RANGE)})`;
+              ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(pointer.x, pointer.y); ctx.stroke();
+            }
+          }
+          ctx.fillStyle = 'rgba(242,246,241,.75)';
+          ctx.beginPath(); ctx.arc(a.x, a.y, 1.6, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+
+      function loop() { update(); draw(); frame = requestAnimationFrame(loop); }
+
+      resize();
+      window.addEventListener('resize', resize);
+      if (reduceMotion) return; // keep a still picture, no animation and no pointer tracking
+
+      hero.addEventListener('pointermove', (e) => {
+        const rect = hero.getBoundingClientRect();
+        pointer.x = e.clientX - rect.left;
+        pointer.y = e.clientY - rect.top;
+        pointer.active = true;
+      });
+      hero.addEventListener('pointerleave', () => { pointer.active = false; });
+
+      // Only animate while the hero is on screen, to save battery
+      new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) { if (!frame) loop(); }
+        else { cancelAnimationFrame(frame); frame = null; }
+      }).observe(hero);
+    })();
+  </script>
 </body>
 </html>
