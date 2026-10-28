@@ -69,14 +69,19 @@
     /* Hero photo layers (back to front): photo, color tint, blue multiply layer, particle canvas, grain */
     .hero-photo {
       position: absolute; inset: 0; z-index: -4; width: 100%; height: 100%;
-      object-fit: cover; object-position: 50% 25%;
-      filter: saturate(.7) contrast(1.05) blur(1.5px);
-      transform: scale(1.03); /* hides the soft edges the blur creates */
+      object-fit: cover; object-position: center;
     }
-    .hero-tone { position: absolute; inset: 0; z-index: -3; background: #1F6F8B; mix-blend-mode: multiply; opacity: .45; }
+    .hero-tone { position: absolute; inset: 0; z-index: -3; background: #1F6F8B; mix-blend-mode: multiply; opacity: .25; }
     .hero-tint {
       position: absolute; inset: 0; z-index: -2;
-      background: linear-gradient(100deg, rgba(11,42,60,.93) 0%, rgba(11,42,60,.74) 55%, rgba(15,58,82,.55) 100%);
+      background: linear-gradient(100deg, rgba(11,42,60,.75) 0%, rgba(11,42,60,.5) 55%, rgba(11,42,60,.3) 100%);
+    }
+
+    /* Projects section: wall photo behind a light layer so the cards stay easy to read */
+    .projects-bg {
+      background:
+        linear-gradient(rgba(242,244,241,.82), rgba(242,244,241,.82)),
+        url("images/wall.avif") center / cover no-repeat;
     }
 
     /* Interactive states: every clickable thing gets hover, focus-visible, active */
@@ -119,7 +124,7 @@
   <!-- ============ HERO ============ -->
   <header class="hero-bg text-chalk">
     <!-- Decorative background layers, hidden from screen readers -->
-    <img src="images/kos.jpg" alt="" class="hero-photo" aria-hidden="true">
+    <img src="images/blue-wall.avif" alt="" class="hero-photo" aria-hidden="true">
     <div class="hero-tone" aria-hidden="true"></div>
     <div class="hero-tint" aria-hidden="true"></div>
     <canvas id="hero-canvas" class="absolute inset-0 h-full w-full" style="z-index:-1" aria-hidden="true"></canvas>
@@ -168,7 +173,8 @@
 
   <main>
     <!-- ============ PROJECTS ============ -->
-    <section id="projects" class="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
+    <section id="projects" class="projects-bg">
+     <div class="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
       <h2 class="display max-w-2xl text-4xl sm:text-5xl">Selected projects</h2>
       <p class="mt-4 max-w-xl text-ink/70">Two AI automations built with n8n and Claude. Each one has a README on GitHub that explains how it works.</p>
 
@@ -201,6 +207,7 @@
           </a>
         </article>
       </div>
+     </div>
     </section>
 
     <!-- ============ ABOUT ============ -->
